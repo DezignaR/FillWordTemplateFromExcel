@@ -14,13 +14,18 @@ tag_vr = ""
 var_table_align_vr = []
 var_table_sheet_vr = ""
 var_table_sheet_hr = ""
+title_name = ""
+first_name = ""
+sec_name = ""
+name_doc_file = ""
+
 tab = pd.DataFrame()
 
 
-def saveDoc(title):
+def saveDoc():
     doc = DocxTemplate(path_template_docx)
     doc.render(gen_dict)
-    doc.save(title + str(gen_dict['titul_number']) + " " + str(gen_dict['subsystem']) + ".docx")
+    doc.save("%s %s %s.docx" % (title_name, str(gen_dict[first_name]), str(gen_dict[sec_name])))
 
 
 def getDataFrame(sheet, skip):
@@ -67,10 +72,6 @@ def main():
         global var_table_align_vr
         var_table_align_vr.append(cmb_column_vr.get())
 
-    # def setVarTableAlignVrSec(event):
-    #     global var_table_align_vr_sec
-    #     var_table_align_vr_sec = cmb_column_vr_sec.get()
-
     def setVarTableSheetHr(event):
         global var_table_sheet_hr
         var_table_sheet_hr = cmb_sheet_hz.get()
@@ -78,7 +79,7 @@ def main():
     def setVarTableSheetVr(event):
         global var_table_sheet_vr
         var_table_sheet_vr = cmb_sheet_vr.get()
-        cmb_column_vr['value'] = getNameCol(var_table_sheet_hr, spin_hr.get())
+
         global tag_vr
         tag_vr = getNameCol(var_table_sheet_vr, spin_vr.get(), True)
 
@@ -114,6 +115,9 @@ def main():
         checkbox = Checkbutton(child, text=text)
         return checkbox
 
+    def addEntry(child):
+        return Entry(child)
+
     def checkboxChange(note, check):
         if check.get() == 1:
             notebook.tab(note, state="normal")
@@ -129,7 +133,12 @@ def main():
         if enable_vertical.get() == 1:
             notebook.select(2)
         else:
-            notebook.select(4)
+            notebook.select(3)
+
+        name_col = getNameCol(var_table_sheet_hr, spin_hr.get())
+        cmb_column_vr['value'] = name_col
+        cmb_name_first['values'] = name_col
+        cmb_name_sec['values'] = name_col
 
     def btnContinueVr():
         notebook.select(3)
@@ -143,19 +152,32 @@ def main():
 
     def btnApply():
         getDataFrame(skip=int(spin_hr.get()), sheet=var_table_sheet_hr)
-        for index in range(0, 2):
+        count = len(tab.index)
+        for index in range(0, count):
+            nonlocal prog_bar_var
+            prog_bar_var.set(index * 100 / count)
             getRowTable(index)
             dictMerge()
-            saveDoc("ПИ_ПИ_тест")
+            saveDoc()
+
+    def fillName(event):
+        msg = 0
+        entry_name_full.delete(0, END)
+        entry_name_full.insert(0, "%s %s %s.docx" % (entry_name.get(), cmb_name_first.get(), cmb_name_sec.get()))
+        global title_name, first_name, sec_name
+        title_name = entry_name.get()
+        first_name = cmb_name_first.get()
+        sec_name = cmb_name_sec.get()
 
     root = Tk()
     root.title("Отчётогенератор V1.0")
-    root.geometry("500x300")
+    root.geometry("500x320")
     root.resizable(False, False)
 
     notebook = ttk.Notebook()
 
     enable_vertical = IntVar()
+    prog_bar_var = DoubleVar()
 
     # Области размещения элементов
     path_frame = Frame(notebook, bg='gray')
@@ -169,21 +191,19 @@ def main():
     addNotebook(template_frame, text="Docx")
 
     # Элементы формы - объявление
-
-    entry_xls = Entry(path_frame)
-    btn_xls = Button(path_frame, text='Выбрать')
-
-    entry_doc = Entry(template_frame)
-    btn_doc = Button(template_frame, text='Выбрать')
-
     spin_hr = Spinbox(horizontal_frame, from_=0.0, to=5.0)
     spin_vr = Spinbox(vertical_frame, from_=0.0, to=5.0)
 
+    btn_xls = Button(path_frame, text='Выбрать')
+    btn_doc = Button(template_frame, text='Выбрать')
     btn_continue_xl = Button(path_frame, text="Продолжить")
     btn_continue_hz = Button(horizontal_frame, text="Продолжить")
     btn_continue_vr = Button(vertical_frame, text="Продолжить")
     btn_add_vr = Button(vertical_frame, text="Добавить")
     btn_apply = Button(template_frame, text="Выполнить")
+
+    prog_bar = ttk.Progressbar(template_frame, orient='horizontal', length=100, variable=prog_bar_var,
+                               mode='determinate')
     # Упаковщики
 
     notebook.pack(fill=BOTH, expand=True)
@@ -194,6 +214,7 @@ def main():
 
     label_xl = addLabel("Выберите файл .Xlsx", path_frame)
     label_xl.pack(fill=X)
+    entry_xls = addEntry(path_frame)
     entry_xls.pack(fill=X)
 
     btn_xls.pack(anchor='e')
@@ -251,13 +272,39 @@ def main():
 
     # Четвертая (Выбор шаблона)
 
-    addLabel("Выберите файл шаблон", template_frame)
+    label_dox = addLabel("Выберите файл шаблон", template_frame)
+    label_dox.pack(fill=X)
+    entry_doc = addEntry(template_frame)
     entry_doc.pack(fill=X)
     btn_doc.pack(anchor='e')
     btn_doc.bind('<Button-1>', openFileDialogDC)
 
+    label_name_title = addLabel("Выберите заголовок файла", template_frame)
+    label_name_title.pack(fill=X)
+    entry_name = addEntry(template_frame)
+    entry_name.pack(anchor="w")
+
+    label_name_title = addLabel("Выберите первый тег", template_frame)
+    label_name_title.pack(fill=X)
+    cmb_name_first = addCombobox(template_frame)
+    cmb_name_first.pack(anchor="w")
+    cmb_name_first.bind('<<ComboboxSelected>>', fillName)
+
+    label_name_title = addLabel("Выберите второй тег", template_frame)
+    label_name_title.pack(fill=X)
+    cmb_name_sec = addCombobox(template_frame)
+    cmb_name_sec.pack(anchor="w")
+    cmb_name_sec.bind('<<ComboboxSelected>>', fillName)
+
+    label_name_title = addLabel("Маска имени файла", template_frame)
+    label_name_title.pack(fill=X)
+    entry_name_full = addEntry(template_frame)
+    entry_name_full.pack(fill=X)
+
     btn_apply.pack(side="bottom", anchor='e')
     btn_apply['command'] = btnApply
+
+    prog_bar.pack(side="bottom", anchor='w')
 
     #########################################################################################
 
