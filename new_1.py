@@ -1,11 +1,15 @@
+from tkinter.messagebox import showinfo
+
 import pandas as pd
 from docxtpl import DocxTemplate
 from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog
+import threading
 
 path_template_docx = ""
 path_base_xlsx = ""
+path_save_docx = ""
 tab_vr_dict = {}
 gen_dict = {}
 gen_skip_row = 0
@@ -25,7 +29,7 @@ tab = pd.DataFrame()
 def saveDoc():
     doc = DocxTemplate(path_template_docx)
     doc.render(gen_dict)
-    doc.save("%s %s %s.docx" % (title_name, str(gen_dict[first_name]), str(gen_dict[sec_name])))
+    doc.save("%s/%s %s %s.docx" % (path_save_docx, title_name, str(gen_dict[first_name]), str(gen_dict[sec_name])))
 
 
 def getDataFrame(sheet, skip):
@@ -51,7 +55,12 @@ def dictMerge():
 def getRowTable(index):
     global gen_dict
     gen_dict = tab.iloc[index].to_dict()
-    # print(genDict)
+
+
+def processing(index):
+    getRowTable(index)
+    dictMerge()
+    saveDoc()
 
 
 def getNameCol(sheet, skip, flag=False):
@@ -92,6 +101,11 @@ def main():
         sheet_list = getSheets()
         cmb_sheet_vr['values'] = sheet_list
         cmb_sheet_hz['values'] = sheet_list
+
+    def pathSave():
+        global path_save_docx
+        path_save_docx = filedialog.Directory(root).show()
+        path_save.set(path_save_docx)
 
     def openFileDialogDC(event):
         global path_template_docx
@@ -154,16 +168,17 @@ def main():
         getDataFrame(skip=int(spin_hr.get()), sheet=var_table_sheet_hr)
         count = len(tab.index)
         for index in range(0, count):
-            nonlocal prog_bar_var
-            prog_bar_var.set(index * 100 / count)
-            getRowTable(index)
-            dictMerge()
-            saveDoc()
+            prog_bar_var.set(index * 100 / count - 1)
+            thr = threading.Thread(target=processing, args=[index], name="thr-1", daemon=True)
+            thr.start()
+            thr.join()
+        showinfo(title="Готово!", message="Отчёты сформированы и сохранены в %s." % (path_save_docx))
 
     def fillName(event):
         msg = 0
         entry_name_full.delete(0, END)
-        entry_name_full.insert(0, "%s %s %s.docx" % (entry_name.get(), cmb_name_first.get(), cmb_name_sec.get()))
+        entry_name_full.insert(0, "%s/%s %s %s.docx" % (
+            path_save.get(), entry_name.get(), cmb_name_first.get(), cmb_name_sec.get()))
         global title_name, first_name, sec_name
         title_name = entry_name.get()
         first_name = cmb_name_first.get()
@@ -171,13 +186,14 @@ def main():
 
     root = Tk()
     root.title("Отчётогенератор V1.0")
-    root.geometry("500x320")
+    root.geometry("500x350")
     root.resizable(False, False)
 
     notebook = ttk.Notebook()
 
     enable_vertical = IntVar()
     prog_bar_var = DoubleVar()
+    path_save = StringVar()
 
     # Области размещения элементов
     path_frame = Frame(notebook, bg='gray')
@@ -195,7 +211,7 @@ def main():
     spin_vr = Spinbox(vertical_frame, from_=0.0, to=5.0)
 
     btn_xls = Button(path_frame, text='Выбрать')
-    btn_doc = Button(template_frame, text='Выбрать')
+    btn_doc = Button(template_frame, text='Выбрать шаблон')
     btn_continue_xl = Button(path_frame, text="Продолжить")
     btn_continue_hz = Button(horizontal_frame, text="Продолжить")
     btn_continue_vr = Button(vertical_frame, text="Продолжить")
@@ -279,6 +295,9 @@ def main():
     btn_doc.pack(anchor='e')
     btn_doc.bind('<Button-1>', openFileDialogDC)
 
+    btn_path = Button(template_frame, text="Выбрать путь", command=pathSave)
+    btn_path.pack(anchor="e")
+
     label_name_title = addLabel("Выберите заголовок файла", template_frame)
     label_name_title.pack(fill=X)
     entry_name = addEntry(template_frame)
@@ -304,7 +323,7 @@ def main():
     btn_apply.pack(side="bottom", anchor='e')
     btn_apply['command'] = btnApply
 
-    prog_bar.pack(side="bottom", anchor='w')
+    prog_bar.pack(side="bottom", anchor='e', fill=X)
 
     #########################################################################################
 
